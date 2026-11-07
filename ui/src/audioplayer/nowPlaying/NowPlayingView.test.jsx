@@ -1,5 +1,5 @@
 import React from 'react'
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import subsonic from '../../subsonic'
 import { NowPlayingView } from './NowPlayingView'
@@ -148,5 +148,42 @@ describe('<NowPlayingView />', () => {
     fireEvent(window, new HashChangeEvent('hashchange'))
 
     expect(onClose).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes when going back re-renders the parent inside hashchange', async () => {
+    const onClose = vi.fn()
+    const view = () => (
+      <NowPlayingView
+        open
+        onClose={() => onClose()}
+        audio={{ currentTime: 0 }}
+        track={track}
+      />
+    )
+    let rerender
+    const router = () => act(() => rerender(view()))
+    window.addEventListener('hashchange', router)
+    await act(async () => {
+      ;({ rerender } = render(view()))
+    })
+
+    // Not fireEvent: its outer act would hold the effects until after the dispatch.
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    window.removeEventListener('hashchange', router)
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('slides out before leaving the page', async () => {
+    const props = { audio: { currentTime: 0 }, track, onClose: vi.fn() }
+    const { rerender } = render(<NowPlayingView open {...props} />)
+    await act(async () => {})
+
+    rerender(<NowPlayingView open={false} {...props} />)
+    expect(screen.getByRole('region')).toBeInTheDocument()
+
+    await waitFor(() =>
+      expect(screen.queryByRole('region')).not.toBeInTheDocument(),
+    )
   })
 })

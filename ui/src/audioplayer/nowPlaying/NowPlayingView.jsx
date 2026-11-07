@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useTranslate } from 'react-admin'
 import { fade, makeStyles } from '@material-ui/core/styles'
 import IconButton from '@material-ui/core/IconButton'
+import Slide from '@material-ui/core/Slide'
 import CloseIcon from '@material-ui/icons/Close'
 import subsonic from '../../subsonic'
 import { findActiveLine, pickLyrics, wordProgress } from './lyrics'
@@ -9,12 +10,16 @@ import { findActiveLine, pickLyrics, wordProgress } from './lyrics'
 const MANUAL_SCROLL_HOLD_MS = 4000
 const COVER_SIZE = 900
 
+const prefersReducedMotion = () =>
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
 const useStyles = makeStyles(
   (theme) => ({
     root: {
       position: 'fixed',
       inset: '48px 0 64px 0',
-      zIndex: 999,
+      // Below the player bar (99), so the panel slides down behind it.
+      zIndex: 98,
       display: 'grid',
       gridTemplateColumns: 'minmax(0, min(38vw, 62vh)) minmax(0, 1fr)',
       gap: 'clamp(2rem, 5vw, 6rem)',
@@ -233,18 +238,23 @@ export const NowPlayingView = ({ open, onClose, audio, track }) => {
   const manualScrollUntil = useRef(0)
   useWordFill(containerRef, audio, synced ? lyrics.lines : null, active)
 
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+
+  // Going back re-renders the parent inside hashchange, and a listener swapped mid-dispatch never fires.
   useEffect(() => {
     if (!open) {
       return undefined
     }
-    const onKeyDown = (event) => event.key === 'Escape' && onClose()
+    const close = () => closeRef.current()
+    const onKeyDown = (event) => event.key === 'Escape' && close()
     window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('hashchange', onClose)
+    window.addEventListener('hashchange', close)
     return () => {
       window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('hashchange', onClose)
+      window.removeEventListener('hashchange', close)
     }
-  }, [open, onClose])
+  }, [open])
 
   useEffect(() => {
     containerRef.current?.scrollTo({ top: 0 })
@@ -256,16 +266,13 @@ export const NowPlayingView = ({ open, onClose, audio, track }) => {
     if (!line || Date.now() < manualScrollUntil.current) {
       return
     }
-    const reduceMotion = window.matchMedia(
-      '(prefers-reduced-motion: reduce)',
-    ).matches
     container.scrollTo({
       top: line.offsetTop - container.clientHeight / 2 + line.offsetHeight / 2,
-      behavior: reduceMotion ? 'auto' : 'smooth',
+      behavior: prefersReducedMotion() ? 'auto' : 'smooth',
     })
   }, [active])
 
-  if (!open || !track) {
+  if (!track) {
     return null
   }
 
@@ -289,71 +296,79 @@ export const NowPlayingView = ({ open, onClose, audio, track }) => {
     : translate('nowPlaying.lyricsEmpty', { _: 'No lyrics for this track' })
 
   return (
-    <section
-      className={classes.root}
-      aria-label={translate('nowPlaying.title', { _: 'Now playing' })}
+    <Slide
+      in={open}
+      direction="up"
+      mountOnEnter
+      unmountOnExit
+      timeout={prefersReducedMotion() ? 0 : undefined}
     >
-      {cover && (
-        <div
-          className={classes.glow}
-          style={{ backgroundImage: `url("${cover}")` }}
-        />
-      )}
-      <IconButton
-        className={classes.close}
-        onClick={onClose}
-        aria-label={translate('ra.action.close', { _: 'Close' })}
+      <section
+        className={classes.root}
+        aria-label={translate('nowPlaying.title', { _: 'Now playing' })}
       >
-        <CloseIcon />
-      </IconButton>
-      <div className={classes.track}>
-        {cover && <img className={classes.cover} src={cover} alt="" />}
-        <div>
-          <h2 className={classes.title}>{track.name}</h2>
-          <p className={classes.artist}>{track.singer}</p>
-        </div>
-      </div>
-      {lyrics ? (
-        <div
-          ref={containerRef}
-          className={classes.lyrics}
-          onWheel={holdAutoScroll}
-          onTouchMove={holdAutoScroll}
+        {cover && (
+          <div
+            className={classes.glow}
+            style={{ backgroundImage: `url("${cover}")` }}
+          />
+        )}
+        <IconButton
+          className={classes.close}
+          onClick={onClose}
+          aria-label={translate('ra.action.close', { _: 'Close' })}
         >
-          {lyrics.lines.map((line, index) =>
-            synced ? (
-              <button
-                type="button"
-                key={`${index}-${line.start}`}
-                aria-current={index === active ? 'true' : undefined}
-                className={`${classes.line} ${classes.seekable} ${
-                  index === active ? classes.active : ''
-                }`}
-                onClick={() => seekTo(line)}
-              >
-                {line.words
-                  ? line.words.map((word) => (
-                      <span
-                        key={`${word.start}-${word.text}`}
-                        className={classes.word}
-                      >
-                        {word.text}
-                      </span>
-                    ))
-                  : line.value || '♪'}
-              </button>
-            ) : (
-              <p key={index} className={`${classes.line} ${classes.plain}`}>
-                {line.value}
-              </p>
-            ),
-          )}
+          <CloseIcon />
+        </IconButton>
+        <div className={classes.track}>
+          {cover && <img className={classes.cover} src={cover} alt="" />}
+          <div>
+            <h2 className={classes.title}>{track.name}</h2>
+            <p className={classes.artist}>{track.singer}</p>
+          </div>
         </div>
-      ) : (
-        <p className={classes.status} role="status">
-          {statusText}
-        </p>
-      )}
-    </section>
+        {lyrics ? (
+          <div
+            ref={containerRef}
+            className={classes.lyrics}
+            onWheel={holdAutoScroll}
+            onTouchMove={holdAutoScroll}
+          >
+            {lyrics.lines.map((line, index) =>
+              synced ? (
+                <button
+                  type="button"
+                  key={`${index}-${line.start}`}
+                  aria-current={index === active ? 'true' : undefined}
+                  className={`${classes.line} ${classes.seekable} ${
+                    index === active ? classes.active : ''
+                  }`}
+                  onClick={() => seekTo(line)}
+                >
+                  {line.words
+                    ? line.words.map((word) => (
+                        <span
+                          key={`${word.start}-${word.text}`}
+                          className={classes.word}
+                        >
+                          {word.text}
+                        </span>
+                      ))
+                    : line.value || '♪'}
+                </button>
+              ) : (
+                <p key={index} className={`${classes.line} ${classes.plain}`}>
+                  {line.value}
+                </p>
+              ),
+            )}
+          </div>
+        ) : (
+          <p className={classes.status} role="status">
+            {statusText}
+          </p>
+        )}
+      </section>
+    </Slide>
   )
 }
