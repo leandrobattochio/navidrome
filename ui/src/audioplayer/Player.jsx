@@ -34,6 +34,7 @@ import { keyMap } from '../hotkeys'
 import keyHandlers from './keyHandlers'
 import { calculateGain } from '../utils/calculateReplayGain'
 import { detectBrowserProfile, decisionService } from '../transcode'
+import { lyricsToLrc } from './lyrics'
 
 const Player = () => {
   const theme = useCurrentTheme()
@@ -48,6 +49,7 @@ const Player = () => {
   const currentTrackIdRef = useRef(null)
   const stoppedRef = useRef(false)
   const [audioInstance, setAudioInstance] = useState(null)
+  const playerRef = useRef(null)
   const isDesktop = useMediaQuery('(min-width:810px)')
   const isMobilePlayer =
     /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -278,6 +280,22 @@ const Player = () => {
     [dispatch],
   )
 
+  // The player library only reads a lyric from its queue on track change.
+  const loadLyrics = useCallback((trackId, duration) => {
+    subsonic
+      .getLyricsBySongId(trackId)
+      .then(({ json }) => {
+        const lyric = lyricsToLrc(
+          json?.['subsonic-response']?.lyricsList?.structuredLyrics,
+          duration,
+        )
+        if (lyric && currentTrackIdRef.current === trackId) {
+          playerRef.current?.setState({ lyric })
+        }
+      })
+      .catch(() => {})
+  }, [])
+
   const onAudioPlay = useCallback(
     (info) => {
       if (context && context.state !== 'running') {
@@ -299,6 +317,7 @@ const Player = () => {
                 subsonic.reportPlayback(info.trackId, posMs, 'playing'),
               )
             setCurrentTrackId(info.trackId)
+            loadLyrics(info.trackId, info.duration)
           } else {
             subsonic.reportPlayback(info.trackId, posMs, 'playing')
           }
@@ -320,7 +339,7 @@ const Player = () => {
         }
       }
     },
-    [context, dispatch, showNotifications, currentTrackId],
+    [context, dispatch, showNotifications, currentTrackId, loadLyrics],
   )
 
   const onAudioPlayTrackChange = useCallback(() => {
@@ -456,6 +475,7 @@ const Player = () => {
   return (
     <ThemeProvider theme={createMuiTheme(theme)}>
       <ReactJkMusicPlayer
+        ref={playerRef}
         {...options}
         className={classes.player}
         onAudioListsChange={onAudioListsChange}

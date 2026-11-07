@@ -14,6 +14,7 @@ import {
   PLAYER_REFRESH_QUEUE,
 } from '../actions'
 import config from '../config'
+import { lyricsToLrc } from '../audioplayer/lyrics'
 
 const initialState = {
   queue: [],
@@ -21,15 +22,6 @@ const initialState = {
   clear: false,
   volume: config.defaultUIVolume / 100,
   savedPlayIndex: 0,
-}
-
-const pad = (value) => {
-  const str = value.toString()
-  if (str.length === 1) {
-    return `0${str}`
-  } else {
-    return str
-  }
 }
 
 const makeMusicSrc = (trackId) =>
@@ -56,27 +48,9 @@ const mapToAudioLists = (item) => {
     }
   }
 
-  const { lyrics } = item
-  let lyricText = ''
-
-  if (lyrics) {
-    const structured = JSON.parse(lyrics)
-    for (const structuredLyric of structured) {
-      if (structuredLyric.synced) {
-        for (const line of structuredLyric.line) {
-          let time = Math.floor(line.start / 10)
-          const ms = time % 100
-          time = Math.floor(time / 100)
-          const sec = time % 60
-          time = Math.floor(time / 60)
-          const min = time % 60
-
-          ms.toString()
-          lyricText += `[${pad(min)}:${pad(sec)}.${pad(ms)}] ${line.value}\n`
-        }
-      }
-    }
-  }
+  const lyricText = item.lyrics
+    ? lyricsToLrc(JSON.parse(item.lyrics), item.duration)
+    : ''
 
   return {
     trackId,
