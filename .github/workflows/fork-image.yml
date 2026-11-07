@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  IMAGE_TAG: v0.64.2-onyx.1
+  IMAGE_TAG: v0.64.2-onyx.2
 
 jobs:
   image:
