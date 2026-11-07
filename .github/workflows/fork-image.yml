@@ -2,11 +2,11 @@ name: "Fork: build image"
 on:
   push:
     branches:
-      - feat/web-plugin-lyrics
+      - feat/onyx-theme
   workflow_dispatch:
 
 env:
-  IMAGE_TAG: v0.64.2-weblyrics.1
+  IMAGE_TAG: v0.64.2-onyx.1
 
 jobs:
   image:

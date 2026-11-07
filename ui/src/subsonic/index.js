@@ -131,8 +131,8 @@ const getTopSongs = (artist, count = 50) => {
   return httpClient(url('getTopSongs', null, { artist, count }))
 }
 
-const getLyricsBySongId = (id) => {
-  return httpClient(url('getLyricsBySongId', id))
+const getLyricsBySongId = (id, options) => {
+  return httpClient(url('getLyricsBySongId', id, options))
 }
 
 const streamUrl = (id, options) => {
